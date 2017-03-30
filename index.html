@@ -20,11 +20,11 @@
 				groupSpacing : 55,
 				imageCount : 3,
 				lineWidth : 0.12,
-				imageResolution : new THREE.Vector2(8, 10),
+				imageResolution : new THREE.Vector2(7, 9),
 				edgePadding: 1.2,
 				imagePixelSize : 3,
 				imageSpacing : 5,
-				outerTransparency:0.35,
+				outerTransparency:0.125,
 				showOuterImages: false,
 				perspective: true,
 			}
@@ -106,6 +106,10 @@
 								param.imagePixelSize*param.edgePadding;
 							currentGroup.truePosition = 
 								currentGroup.position.clone();
+							currentGroup.position.x = 
+								currentGroup.position.x*5;
+							currentGroup.position.y = 
+								currentGroup.position.y*5;
 							allGroups.add(currentGroup);
 					}
 				}
@@ -120,17 +124,19 @@
 				0x992200, 1.5);
 			scene.add(bound);
 
+			/*
 			var centerGeo = new THREE.SphereGeometry(1, 50, 50);
 			var center = new THREE.Mesh(centerGeo, 
 				new THREE.MeshBasicMaterial({color:0xff0000}));
 			scene.add(center);
+			*/
 
 			/* Create a point light source with color 0xdddddd, intesity 0.5 */
 			var pointLight = new THREE.PointLight(0xdddddd, 0.5);
 			scene.add(pointLight);
 			// Adjust light position to nicely illuminate object
-			pointLight.position.y = 10;
-			pointLight.position.x = 10;
+			pointLight.position.y = 100;
+			pointLight.position.x = 100;
 			//*/
 
 			/* Ambient lighting - try disabling one of the lights to see each's contribution */
@@ -200,6 +206,25 @@
 				return boundsMesh;
 			}
 
+			function clamp(x) {
+				return Math.min(Math.max(x,-1),1);
+			}
+
+			function handleTraverse(node) {
+				if (node instanceof THREE.Mesh) {
+						if (node.material.transparent)
+							if (param.showOuterImages) {
+								node.material.opacity += 
+									0.002*(param.outerTransparency-node.material.opacity);
+							} else {
+								node.material.opacity += 
+									0.002*(-node.material.opacity);
+							}
+				} else if (node instanceof THREE.Group) {
+					handleTraverse(node.children);
+				}
+			} 
+
 			// Our rendering loop
 			var render = function () {
 				// Rendering function is called each time the 
@@ -213,27 +238,23 @@
 					var current = allGroups.children[child];
 					if (param.showOuterImages) {
 						current.position.x +=
-							0.05*(current.truePosition.x-
-								 current.position.x); 
+							clamp(0.15*(current.truePosition.x-
+								   current.position.x)); 
 						current.position.y +=
-							0.05*(current.truePosition.y-
-								   current.position.y); 
+							clamp(0.15*(current.truePosition.y-
+								   current.position.y)); 
 					} else {
 						current.position.x +=
-							0.05*(10*current.truePosition.x-
-								   current.position.x); 
+							clamp(0.15*(5*current.truePosition.x-
+								   current.position.x)); 
 						current.position.y +=
-							0.05*(10*current.truePosition.y-
-								   current.position.y); 
+							clamp(0.15*(5*current.truePosition.y-
+								   current.position.y)); 
 					}
 				}
 
 				allGroups.traverse( function(node) {
-					if (node.type === THREE.Mesh) {
-						if (node.transparent)
-							node.opacity = 
-								param.outerTransparency * 0.5;
-					}
+					handleTraverse(node);
 				});
 
 				// Render our scene
