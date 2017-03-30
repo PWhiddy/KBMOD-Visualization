@@ -27,15 +27,16 @@
 				outerTransparency:0.125,
 				showOuterImages: false,
 				perspective: true,
+				maxVelocity: 0.2,
+				minVelocity: 0.4,
 			}
 
 			gui = new dat.GUI();
 			gui.add(param, "perspective").onChange( function() {
 				if (!param.perspective) {
-					controls.rotateSpeed = 0.1;
+					controls.rotateSpeed = 0.04;
 					camera.fov = 0.1;
 					camera.position = camera.position.multiplyScalar(200);
-				//	camera.zoom = 0.002;
 					camera.near = 2000;
 					camera.far = 1000000;
 					camera.updateProjectionMatrix();
@@ -43,7 +44,6 @@
 					controls.rotateSpeed = 0.4;
 					camera.fov = 35;
 					camera.position = camera.position.multiplyScalar(0.005);
-				//	camera.zoom = 0.002;
 					camera.near = 2;
 					camera.far = 4800;
 					camera.updateProjectionMatrix();
@@ -65,10 +65,9 @@
 			var camera = new THREE.PerspectiveCamera( 35, 
 				width/height, 2, 4800 );
 
-			var orthoCamera = new THREE.OrthographicCamera( width / - 4, width / 4, height / 4, height / - 4, -4000, 4000 );
-
 			// Move camera back so we are looking at the origin
-			camera.position.z = 350;
+			camera.position.z = -350;
+			camera.lookAt(new THREE.Vector3());
 
 			// The threejs webgl renderer
 			var renderer = new THREE.WebGLRenderer({antialias: true});
@@ -85,7 +84,6 @@
 			controls.dampingFactor = 0.25;	
 			controls.zoomSpeed = 0.5;
 			controls.rotateSpeed = 0.4;	
-			var controlsOrtho = new THREE.OrbitControls( orthoCamera, renderer.domElement );
 
 			var allGroups = new THREE.Group();
 			for (var g = 0; g < param.imageGroups; g++) {
@@ -121,8 +119,20 @@
 			scene.add(allGroups);
 
 			var bound = createBound(param, new THREE.Vector3(),
-				0x992200, 1.5);
+				0x992200, param.maxVelocity);
 			scene.add(bound);
+
+			var initialSource = imgSpace(param, 0, 0, 
+				Math.floor(param.imageResolution.x/2), 
+				Math.floor(param.imageResolution.y/2));
+
+			var initialDest = pointsInCone(
+				param, 0, 0, 1, 2, param.maxVelocity);
+
+			var trajects = createTrajectory( 
+				initialSource,
+				initialDest );
+			scene.add(trajects);
 
 			/*
 			var centerGeo = new THREE.SphereGeometry(1, 50, 50);
@@ -143,6 +153,32 @@
 			var hemisphereLight = new THREE.HemisphereLight(0x8899cc, 0x334455);
 			scene.add(hemisphereLight);
 			//*/
+
+			function imgSpace(p, group, im, x, y) {
+				return new THREE.Vector3(
+					p.imagePixelSize*
+					(x-Math.floor(p.imageResolution.x/2)),
+					p.imagePixelSize*
+					(y-Math.floor(p.imageResolution.y/2)),
+					p.groupSpacing*(group-Math.floor(p.imageGroups/2)) 
+					+ p.imageSpacing*(im-Math.floor(p.imageCount/2)));
+			}
+
+			function pointsInCone(p, groupA, imA,
+				groupB, imB, maxVelocity) {
+				var points = [];
+				let zO = imgSpace(p, groupA, imA, 0, 0).z;
+				for (var x = 0; x < p.imageResolution.x; x++) {
+					for (var y = 0; y < p.imageResolution.y; y++) {
+						let pL = imgSpace(p, groupB, imB, x, y);
+						if (pL.distanceTo( new THREE.Vector3(0, 0, pL.z))
+							<(pL.z-zO)*maxVelocity*0.5) {
+							points.push(pL);
+						}
+					}
+				}
+				return points;
+			}
 
 			function createImageSet(p, opac) {
 
@@ -179,6 +215,42 @@
 				}
 				return allImages;
 			}
+			
+			function createTrajectory(source, destinations) {
+				var verts = new Float32Array(destinations.length*6);
+				for (var v = 0; v < destinations.length; v++) {
+					verts[v*6  ] = source.x;
+					verts[v*6+1] = source.y;
+					verts[v*6+2] = source.z;
+					verts[v*6+3] = destinations[v].x;
+					verts[v*6+4] = destinations[v].y;
+					verts[v*6+5] = destinations[v].z;
+				}
+				var lineMaterial = 
+					new THREE.LineBasicMaterial({color:0xff6e00});
+				var trajectGeo = new THREE.BufferGeometry();
+				trajectGeo.addAttribute('position', 
+					new THREE.BufferAttribute(verts, 3));
+				trajectGeo.computeBoundingSphere();
+				return new THREE.LineSegments( trajectGeo, lineMaterial);
+			}
+			
+			function createBound(p, pos, color, velocity) {
+				var boundsGeo = new THREE.CylinderBufferGeometry( 
+					0.5*p.imagePixelSize, p.imagePixelSize*
+					p.imageCount*p.imageSpacing*velocity, 
+					1, 80, 1, true);
+				var boundsMaterial = new THREE.MeshBasicMaterial(
+					{color:color, side:THREE.DoubleSide, 
+					 transparent:true, opacity:0.65} );
+				var boundsMesh = new THREE.Mesh(boundsGeo, boundsMaterial);
+				boundsMesh.rotation.y = Math.PI/4;
+				boundsMesh.rotation.x = -Math.PI/2;
+				boundsMesh.position = pos;
+				boundsMesh.scale.y = (p.imageGroups-1)*p.groupSpacing + 
+					(p.imageCount-1)*p.imageSpacing;
+				return boundsMesh;
+			}
 
 			function updateBound(p, bound, pos, f) {
 				bound.scale.x = f;
@@ -186,31 +258,14 @@
 				var w = ((p.imageGroups-1)*p.groupSpacing + 
 					(p.imageCount-1)*p.imageSpacing);
 				bound.scale.y = f*w;
-				bound.position.z = 0.5*(1-f)*w;
-			}
-
-			function createBound(p, pos, color, velocity) {
-				var boundsGeo = new THREE.CylinderBufferGeometry( 
-					0.5*p.imagePixelSize, 0.5*p.imagePixelSize*
-					p.imageCount*p.imageSpacing*velocity, 
-					1, 80, 1, true);
-				var boundsMaterial = new THREE.MeshBasicMaterial(
-					{color:color, side:THREE.DoubleSide, 
-					 transparent:true, opacity:0.85} );
-				var boundsMesh = new THREE.Mesh(boundsGeo, boundsMaterial);
-				boundsMesh.rotation.y = Math.PI/4;
-				boundsMesh.rotation.x = Math.PI/2;
-				boundsMesh.position = pos;
-				boundsMesh.scale.y = (p.imageGroups-1)*p.groupSpacing + 
-					(p.imageCount-1)*p.imageSpacing;
-				return boundsMesh;
+				bound.position.z = -0.5*(1-f)*w;
 			}
 
 			function clamp(x) {
-				return Math.min(Math.max(x,-1),1);
+				return Math.min(Math.max(x,-2),2);
 			}
 
-			function handleTraverse(node) {
+			function traverseOpacity(node) {
 				if (node instanceof THREE.Mesh) {
 						if (node.material.transparent)
 							if (param.showOuterImages) {
@@ -221,7 +276,7 @@
 									0.002*(-node.material.opacity);
 							}
 				} else if (node instanceof THREE.Group) {
-					handleTraverse(node.children);
+					traverseOpacity(node.children);
 				}
 			} 
 
@@ -238,23 +293,23 @@
 					var current = allGroups.children[child];
 					if (param.showOuterImages) {
 						current.position.x +=
-							clamp(0.15*(current.truePosition.x-
+							clamp(0.35*(current.truePosition.x-
 								   current.position.x)); 
 						current.position.y +=
-							clamp(0.15*(current.truePosition.y-
+							clamp(0.35*(current.truePosition.y-
 								   current.position.y)); 
 					} else {
 						current.position.x +=
-							clamp(0.15*(5*current.truePosition.x-
+							clamp(0.35*(5*current.truePosition.x-
 								   current.position.x)); 
 						current.position.y +=
-							clamp(0.15*(5*current.truePosition.y-
+							clamp(0.35*(5*current.truePosition.y-
 								   current.position.y)); 
 					}
 				}
 
 				allGroups.traverse( function(node) {
-					handleTraverse(node);
+					traverseOpacity(node);
 				});
 
 				// Render our scene
