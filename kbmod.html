@@ -1,0 +1,246 @@
+<html>
+	<head>
+		<title>KBMOD Structure</title>
+		<style>
+			body { margin: 0; }
+			canvas { width: 100%; height: 100% }
+
+		</style>
+	</head>
+	<body>
+		<script src="js/three.js"></script>
+		<script src="js/OrbitControls.js"></script>
+		<script src="js/dat.gui.min.js"></script>
+		<script>
+
+			// @author PWhiddy
+
+			param = {
+				imageGroups : 3,
+				groupSpacing : 55,
+				imageCount : 3,
+				lineWidth : 0.12,
+				imageResolution : new THREE.Vector2(8, 10),
+				edgePadding: 1.2,
+				imagePixelSize : 3,
+				imageSpacing : 5,
+				outerTransparency:0.35,
+				showOuterImages: false,
+				perspective: true,
+			}
+
+			gui = new dat.GUI();
+			gui.add(param, "perspective").onChange( function() {
+				if (!param.perspective) {
+					controls.rotateSpeed = 0.1;
+					camera.fov = 0.1;
+					camera.position = camera.position.multiplyScalar(200);
+				//	camera.zoom = 0.002;
+					camera.near = 2000;
+					camera.far = 1000000;
+					camera.updateProjectionMatrix();
+				} else {
+					controls.rotateSpeed = 0.4;
+					camera.fov = 35;
+					camera.position = camera.position.multiplyScalar(0.005);
+				//	camera.zoom = 0.002;
+					camera.near = 2;
+					camera.far = 4800;
+					camera.updateProjectionMatrix();
+				}
+			});
+			gui.add(param, "showOuterImages");
+
+			// A container to place our objects into
+			var scene = new THREE.Scene();
+			/*
+			* PerspectiveCamera( fov, aspect, near, far )
+			* fov — Camera  vertical field of view.
+			* aspect — Camera  aspect ratio.
+			* near — Camera near plane. (Objects outside the near and far plane won't be rendered)
+			* far — Camera far plane.
+			*/
+			var width = window.innerWidth;
+			var height = window.innerHeight;
+			var camera = new THREE.PerspectiveCamera( 35, 
+				width/height, 2, 4800 );
+
+			var orthoCamera = new THREE.OrthographicCamera( width / - 4, width / 4, height / 4, height / - 4, -4000, 4000 );
+
+			// Move camera back so we are looking at the origin
+			camera.position.z = 350;
+
+			// The threejs webgl renderer
+			var renderer = new THREE.WebGLRenderer({antialias: true});
+			// Tell renderer the dimensions of our screen
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			renderer.setPixelRatio( window.devicePixelRatio );
+			renderer.setClearColor(0xffffff, 1.0)
+			// Attach renderer to DOM element 
+			document.body.appendChild( renderer.domElement );
+
+			// adding orbit controls to allow camera movement
+			var controls = new THREE.OrbitControls( camera, renderer.domElement );
+			controls.enableDamping = true;
+			controls.dampingFactor = 0.25;	
+			controls.zoomSpeed = 0.5;
+			controls.rotateSpeed = 0.4;	
+			var controlsOrtho = new THREE.OrbitControls( orthoCamera, renderer.domElement );
+
+			var allGroups = new THREE.Group();
+			for (var g = 0; g < param.imageGroups; g++) {
+				for (var gx = -1; gx < 2; gx++) {
+					for (var gy = -1; gy < 2; gy++) {
+						var currentGroup;
+						if (gx===0&&gy===0) {
+							currentGroup = createImageSet(param, 1.0);
+						} else {
+							currentGroup = createImageSet(param, 0.1);
+						}
+							currentGroup.position.z = g*param.groupSpacing;
+							currentGroup.position.y = 
+								gy*param.imageResolution.y*
+								param.imagePixelSize*param.edgePadding;
+							currentGroup.position.x =
+								gx*param.imageResolution.x*
+								param.imagePixelSize*param.edgePadding;
+							currentGroup.truePosition = 
+								currentGroup.position.clone();
+							allGroups.add(currentGroup);
+					}
+				}
+			}
+			allGroups.position.z = 
+				-param.groupSpacing*Math.floor(param.imageGroups/2);
+			if (param.imageGroups%2===0) 
+				allGroups.position.z += 0.5*param.groupSpacing;
+			scene.add(allGroups);
+
+			var bound = createBound(param, new THREE.Vector3(),
+				0x992200, 1.5);
+			scene.add(bound);
+
+			var centerGeo = new THREE.SphereGeometry(1, 50, 50);
+			var center = new THREE.Mesh(centerGeo, 
+				new THREE.MeshBasicMaterial({color:0xff0000}));
+			scene.add(center);
+
+			/* Create a point light source with color 0xdddddd, intesity 0.5 */
+			var pointLight = new THREE.PointLight(0xdddddd, 0.5);
+			scene.add(pointLight);
+			// Adjust light position to nicely illuminate object
+			pointLight.position.y = 10;
+			pointLight.position.x = 10;
+			//*/
+
+			/* Ambient lighting - try disabling one of the lights to see each's contribution */
+			var hemisphereLight = new THREE.HemisphereLight(0x8899cc, 0x334455);
+			scene.add(hemisphereLight);
+			//*/
+
+			function createImageSet(p, opac) {
+
+				var allImages = new THREE.Group();
+
+				var imageMaterial = new THREE.MeshBasicMaterial({color:0x2277aa, transparent:opac!==1.0, opacity:opac, depthTest:opac===1.0});
+				var lineGeo = new THREE.CylinderBufferGeometry(
+							p.lineWidth, p.lineWidth, 
+							p.imagePixelSize, 6);
+
+				for (var i = 0; i < p.imageCount; i++) {
+					var image = new THREE.Group();
+					for (var x = 0; x <= p.imageResolution.x; x++) {
+
+						var mesh = new THREE.Mesh(lineGeo, imageMaterial);
+						mesh.position.x = 
+							(x-0.5*p.imageResolution.x)*p.imagePixelSize;
+						mesh.scale.y = p.imageResolution.y;
+						image.add(mesh);
+					}
+					for (var y = 0; y <= p.imageResolution.y; y++) {
+						var mesh = new THREE.Mesh(lineGeo, imageMaterial);
+						mesh.position.y = 
+							(y-0.5*p.imageResolution.y)*p.imagePixelSize;
+						mesh.scale.y = p.imageResolution.x;
+						mesh.rotation.z = Math.PI/2;
+						image.add(mesh);
+					}
+					image.position.z = 
+						(i-Math.floor(p.imageCount/2))*p.imageSpacing;
+					if (p.imageCount%2===0) 
+						image.position.z += 0.5*p.imageSpacing
+					allImages.add(image);
+				}
+				return allImages;
+			}
+
+			function updateBound(p, bound, pos, f) {
+				bound.scale.x = f;
+				bound.scale.z = f;
+				var w = ((p.imageGroups-1)*p.groupSpacing + 
+					(p.imageCount-1)*p.imageSpacing);
+				bound.scale.y = f*w;
+				bound.position.z = 0.5*(1-f)*w;
+			}
+
+			function createBound(p, pos, color, velocity) {
+				var boundsGeo = new THREE.CylinderBufferGeometry( 
+					0.5*p.imagePixelSize, 0.5*p.imagePixelSize*
+					p.imageCount*p.imageSpacing*velocity, 
+					1, 80, 1, true);
+				var boundsMaterial = new THREE.MeshBasicMaterial(
+					{color:color, side:THREE.DoubleSide, 
+					 transparent:true, opacity:0.85} );
+				var boundsMesh = new THREE.Mesh(boundsGeo, boundsMaterial);
+				boundsMesh.rotation.y = Math.PI/4;
+				boundsMesh.rotation.x = Math.PI/2;
+				boundsMesh.position = pos;
+				boundsMesh.scale.y = (p.imageGroups-1)*p.groupSpacing + 
+					(p.imageCount-1)*p.imageSpacing;
+				return boundsMesh;
+			}
+
+			// Our rendering loop
+			var render = function () {
+				// Rendering function is called each time the 
+				// browser requests a new frame
+				requestAnimationFrame( render );
+
+				updateBound(param, bound, new THREE.Vector3(), 
+					0.5*Math.sin(Date.now()*0.0002)+0.5);
+
+				for (child in allGroups.children) {
+					var current = allGroups.children[child];
+					if (param.showOuterImages) {
+						current.position.x +=
+							0.05*(current.truePosition.x-
+								 current.position.x); 
+						current.position.y +=
+							0.05*(current.truePosition.y-
+								   current.position.y); 
+					} else {
+						current.position.x +=
+							0.05*(10*current.truePosition.x-
+								   current.position.x); 
+						current.position.y +=
+							0.05*(10*current.truePosition.y-
+								   current.position.y); 
+					}
+				}
+
+				allGroups.traverse( function(node) {
+					if (node.type === THREE.Mesh) {
+						if (node.transparent)
+							node.opacity = 
+								param.outerTransparency * 0.5;
+					}
+				});
+
+				// Render our scene
+				renderer.render( scene, camera );
+			};
+
+			render();
+		</script>
+	</body>
+</html>
