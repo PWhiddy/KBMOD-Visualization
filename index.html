@@ -26,10 +26,16 @@
 				imageSpacing : 5,
 				outerTransparency:0.125,
 				showOuterImages: false,
+				showTrajectories: false,
 				perspective: true,
 				maxVelocity: 0.7,
 				minVelocity: 0.4,
+				animate: false,
+				time: 0,
+				motion: 0,
 			}
+
+			var globalT = -Math.PI/2;
 
 			gui = new dat.GUI();
 			gui.add(param, "perspective").onChange( function() {
@@ -50,6 +56,9 @@
 				}
 			});
 			gui.add(param, "showOuterImages");
+			gui.add(param, "showTrajectories");
+			gui.add(param, "animate");
+			gui.add(param, "time", 0.0, 1.0).listen();
 
 			// A container to place our objects into
 			var scene = new THREE.Scene();
@@ -84,7 +93,10 @@
 			controls.dampingFactor = 0.25;	
 			controls.zoomSpeed = 0.5;
 			controls.rotateSpeed = 0.4;	
-
+			/*
+			var textureGroups = [];
+			for (var tex = 0; Float32Array() 
+			*/
 			var allGroups = new THREE.Group();
 			for (var g = 0; g < param.imageGroups; g++) {
 				for (var gx = -1; gx < 2; gx++) {
@@ -126,12 +138,18 @@
 				Math.floor(param.imageResolution.x/2), 
 				Math.floor(param.imageResolution.y/2));
 
-			var initialDest = pointsInCone(
-				param, 0, 0, 1, 2, param.maxVelocity);
+			var initialDests = [];
+			for (var dest = 0; dest < 3; dest++) {
+				initialDests.push(pointsInCone(
+				param, 0, 0, dest, 2, param.maxVelocity));
+			}
 
-			var trajects = createTrajectory( 
+			var trajects = new THREE.Group();
+			for (d in initialDests) {
+				trajects.add(createTrajectory( 
 				initialSource,
-				initialDest );
+				initialDests[d] ));
+			}
 			scene.add(trajects);
 
 			/*
@@ -162,6 +180,15 @@
 					(y-Math.floor(p.imageResolution.y/2)),
 					p.groupSpacing*(group-Math.floor(p.imageGroups/2)) 
 					+ p.imageSpacing*(im-Math.floor(p.imageCount/2)));
+			}
+
+			function createTexture(p, group, im, offset) {
+				let pixelCount = 
+					p.imageResolution.x*p.imageResolution.y;
+				var tex = new Float32Array(pixelCount);
+				for (var p = 0; p < pixelCount; p++) {
+					tex[p] = gaussian(0, 0.5);
+				}
 			}
 
 			function pointsInCone(p, groupA, imA,
@@ -238,11 +265,11 @@
 			function createBound(p, pos, color, velocity) {
 				var boundsGeo = new THREE.CylinderBufferGeometry( 
 					0.5*p.imagePixelSize, p.imagePixelSize*
-					p.imageCount*p.imageSpacing*velocity, 
+					p.imageGroups*p.imageSpacing*velocity, 
 					1, 80, 1, true);
 				var boundsMaterial = new THREE.MeshBasicMaterial(
 					{color:color, side:THREE.DoubleSide, 
-					 transparent:true, opacity:0.65} );
+					 transparent:true, opacity:0.25, depthWrite:false} );
 				var boundsMesh = new THREE.Mesh(boundsGeo, boundsMaterial);
 				boundsMesh.rotation.y = Math.PI/4;
 				boundsMesh.rotation.x = -Math.PI/2;
@@ -259,6 +286,15 @@
 					(p.imageCount-1)*p.imageSpacing);
 				bound.scale.y = f*w;
 				bound.position.z = -0.5*(1-f)*w;
+			}
+
+			function updateTrajects(p, trajects, pos, f) {
+				trajects.scale.x = f;
+				trajects.scale.y = f;
+				var w = ((p.imageGroups-1)*p.groupSpacing + 
+					(p.imageCount-1)*p.imageSpacing);
+				trajects.scale.z = f;
+				trajects.position.z = -0.5*(1-f)*w;
 			}
 
 			function clamp(x) {
@@ -280,14 +316,55 @@
 				}
 			} 
 
+			function gaussian(mean, stdev) {
+			    var y2;
+			    var use_last = false;
+			    return function() {
+			        var y1;
+			        if(use_last) {
+			           y1 = y2;
+			           use_last = false;
+			        }
+			        else {
+			            var x1, x2, w;
+			            do {
+			                 x1 = 2.0 * Math.random() - 1.0;
+			                 x2 = 2.0 * Math.random() - 1.0;
+			                 w  = x1 * x1 + x2 * x2;               
+			            } while( w >= 1.0);
+			            w = Math.sqrt((-2.0 * Math.log(w))/w);
+			            y1 = x1 * w;
+			            y2 = x2 * w;
+			            use_last = true;
+			       }
+
+			       var retval = mean + stdev * y1;
+			       if(retval > 0) 
+			           return retval;
+			       return -retval;
+			   }
+			}
+
 			// Our rendering loop
 			var render = function () {
 				// Rendering function is called each time the 
 				// browser requests a new frame
 				requestAnimationFrame( render );
 
-				updateBound(param, bound, new THREE.Vector3(), 
-					0.5*Math.sin(Date.now()*0.0002)+0.5);
+				globalT += 0.004;
+
+				if (param.animate)
+					param.time = 0.5*Math.sin(globalT)+0.5;
+
+				param.motion += 0.12*(param.time-param.motion);
+
+				updateBound(param, bound, 
+					new THREE.Vector3(), param.motion);
+
+				updateTrajects(param, trajects, 
+					new THREE.Vector3(), param.motion);
+
+				trajects.visible = param.showTrajectories;
 
 				for (child in allGroups.children) {
 					var current = allGroups.children[child];
