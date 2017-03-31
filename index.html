@@ -150,6 +150,18 @@
 				initialSource,
 				initialDests[d] ));
 			}
+
+			/*
+			for (d in initialDest) {
+				//console.log(d);
+				let current = pointsInCone(param, 0, 2, 1, 2);
+				let a = trajects.geometry.attributes.position.array;
+				let offset = new THREE.Vector3(a[6*d+3], a[6*d+4], a[6*d+5]);
+				current.position = offset;
+				trajects.add(createTrajectory(initialDest[d], current));
+			}
+			*/
+
 			scene.add(trajects);
 
 			/*
