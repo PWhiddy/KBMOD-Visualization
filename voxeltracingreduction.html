@@ -1,0 +1,97 @@
+<html>
+	<head>
+		<title>Tracing voxels efficiently</title>
+		<style>
+			body { margin: 0; }
+			canvas { width: 100%; height: 100% }
+
+		</style>
+	</head>
+	<body>
+
+	 <canvas id="myCanvas" width="800" height="600" style="border:1px solid #000000;">
+	</canvas> 
+
+		<script>
+
+		var c = document.getElementById("myCanvas");
+		var ctx = c.getContext("2d");	
+
+		const anglesCount = 15;
+		const minAngle = 0.0;
+		const maxAngle = 1.0;
+		const angleStep = (maxAngle - minAngle)/anglesCount;
+
+		const velocitiesCount = 25;
+		const minVelocity = 200;
+		const maxVelocity = 350;
+		const velocityStep = 
+			(maxVelocity - minVelocity)/velocitiesCount;
+
+		const imageTimes = [0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.1, 1.01, 1.03, 1.04, 1.1];
+
+		const trajectoryCount = anglesCount*velocitiesCount;
+
+		var trajectories = [trajectoryCount];
+		for (let a = 0; a<anglesCount; a++) {
+			let cAngle = minAngle+a*angleStep;
+			for (let v = 0; v<velocitiesCount; v++) {
+				let current = {};
+				let cVel = minVelocity+v*velocityStep;
+				current.xv = cVel*Math.cos(cAngle);
+				current.yv = cVel*Math.sin(cAngle);
+				trajectories[a*velocitiesCount+v] = current;
+			}
+		}
+
+		var samplePoints = [trajectoryCount];
+		var masterList = new Map();
+		ctx.fillStyle="#FF0000";
+		for (var t = 0; t<trajectoryCount; t++) {
+			let curTraj = trajectories[t];
+			let curSet = new Set();
+			for (var img = 0; img<imageTimes.length; img++) {
+				let time = imageTimes[img];
+				ctx.fillRect(400+time*curTraj.xv,300-time*curTraj.yv,1,1);
+				let val = mapToSpiral(Math.floor(time*curTraj.xv), Math.floor(time*curTraj.yv), img);
+				curSet.add(val);
+				if (!masterList.has(val)) {
+					masterList.set(val, 1);
+				} else {
+					masterList.set(val, masterList.get(val)+1);
+				}
+			}
+			samplePoints[t] = curSet;
+		}
+
+		for (var [key, value] of masterList) {
+			if (value > 1) console.log(key + ", " + value + " Occurances");
+		}
+
+		/*
+		ctx.fillStyle="#FF0000";
+		for (t of trajectories) {
+			ctx.fillRect(400+t.xv,300-t.yv,1,1);
+		}
+		*/
+
+		console.log(trajectories);
+
+		console.log(samplePoints);
+
+	//	console.log(mapToSpiral(3000, 3000, 3));
+
+		function mapToSpiral(x,y,z) {
+			let ax = Math.abs(x);
+			let ay = Math.abs(y);
+			if (ax > 3000 || ay > 3000 ) console.log("X OR Y TOO BIG!");
+			if (ax>ay && x>0) return 4*x*x-3*x+y+1+z*100000000;
+			if (ax>ay && x<=0) return 4*x*x-x-y+1+z*100000000;
+			if (ax<=ay && y>0) return 4*y*y-y-x+1+z*100000000;
+			return 4*y*y-3*y+x+1+z*100000000;
+		}
+
+
+		</script>
+	</body>
+</html>
