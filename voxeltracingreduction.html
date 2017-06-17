@@ -17,13 +17,13 @@
 		var c = document.getElementById("myCanvas");
 		var ctx = c.getContext("2d");	
 
-		const anglesCount = 15;
+		const anglesCount = 20;
 		const minAngle = 0.0;
 		const maxAngle = 1.0;
 		const angleStep = (maxAngle - minAngle)/anglesCount;
 
-		const velocitiesCount = 25;
-		const minVelocity = 200;
+		const velocitiesCount = 20;
+		const minVelocity = 35;
 		const maxVelocity = 350;
 		const velocityStep = 
 			(maxVelocity - minVelocity)/velocitiesCount;
@@ -52,7 +52,7 @@
 			let curSet = new Set();
 			for (var img = 0; img<imageTimes.length; img++) {
 				let time = imageTimes[img];
-				ctx.fillRect(400+time*curTraj.xv,300-time*curTraj.yv,1,1);
+			//	ctx.fillRect(400+time*curTraj.xv,300-time*curTraj.yv,1,1);
 				let val = mapToSpiral(Math.floor(time*curTraj.xv), Math.floor(time*curTraj.yv), img);
 				curSet.add(val);
 				if (!masterList.has(val)) {
@@ -64,16 +64,27 @@
 			samplePoints[t] = curSet;
 		}
 
+		var dupList = new Set();
 		for (var [key, value] of masterList) {
-			if (value > 1) console.log(key + ", " + value + " Occurances");
+			if (value > 1) {
+				console.log(key + ", " + value + " Occurances");
+				dupList.add(key);
+			}
 		}
 
-		/*
+		var components = new Set();
+		for (var tSet of samplePoints) {
+			components.add(setUnion(tSet, dupList))
+		}
+		console.log("Components: ");
+		console.log(components);
+
+		//*
 		ctx.fillStyle="#FF0000";
 		for (t of trajectories) {
 			ctx.fillRect(400+t.xv,300-t.yv,1,1);
 		}
-		*/
+		//*/
 
 		console.log(trajectories);
 
@@ -91,6 +102,35 @@
 			return 4*y*y-3*y+x+1+z*100000000;
 		}
 
+		// Combine sets
+		function setUnion(a,b) {
+			let intersection = new Set();
+			for (var elem of b) {
+				if (a.has(elem)) {
+					intersection.add(elem);
+				}
+			}
+			return intersection;
+		}
+
+		// Is b contained within a?
+		function setIsSuper(a,b) {
+			for (var elem of b) {
+				if (!a.has(elem)) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		// Subtract b from a
+		function setDiff(a,b) {
+			let diff = new Set(a);
+			for (var elem of b) {
+				diff.delete(elem);
+			}
+			return diff;
+		}
 
 		</script>
 	</body>
