@@ -9,7 +9,7 @@
 	</head>
 	<body>
 
-	 <canvas id="myCanvas" width="800" height="600" style="border:1px solid #000000;">
+	 <canvas id="myCanvas" width="800" height="800" style="border:1px solid #000000;">
 	</canvas> 
 
 		<script>
@@ -23,7 +23,7 @@
 		const angleStep = (maxAngle - minAngle)/anglesCount;
 
 		const velocitiesCount = 20;
-		const minVelocity = 35;
+		const minVelocity = 30;
 		const maxVelocity = 350;
 		const velocityStep = 
 			(maxVelocity - minVelocity)/velocitiesCount;
@@ -46,22 +46,22 @@
 
 		var samplePoints = [trajectoryCount];
 		var masterList = new Map();
-		ctx.fillStyle="#FF0000";
-		for (var t = 0; t<trajectoryCount; t++) {
+		ctx.fillStyle="#00FF00";
+		for (let t = 0; t<trajectoryCount; t++) {
 			let curTraj = trajectories[t];
-			let curSet = new Set();
+			let curSamples = [];
 			for (var img = 0; img<imageTimes.length; img++) {
 				let time = imageTimes[img];
 			//	ctx.fillRect(400+time*curTraj.xv,300-time*curTraj.yv,1,1);
 				let val = mapToSpiral(Math.floor(time*curTraj.xv), Math.floor(time*curTraj.yv), img);
-				curSet.add(val);
+				curSamples.push(val);
 				if (!masterList.has(val)) {
 					masterList.set(val, 1);
 				} else {
 					masterList.set(val, masterList.get(val)+1);
 				}
 			}
-			samplePoints[t] = curSet;
+			samplePoints[t] = curSamples;
 		}
 
 		var dupList = new Set();
@@ -72,25 +72,64 @@
 			}
 		}
 
-		var components = new Set();
+		var components = [];
 		for (var tSet of samplePoints) {
-			components.add(setUnion(tSet, dupList))
+			components.push([...setIntersection(new Set(tSet), dupList)]); //sketchy
 		}
 		console.log("Components: ");
 		console.log(components);
 
-		//*
+		var cTree = {};
+		//cTree.pixel = 1;
+		cTree.children = new Map();
+		for (let i = 0; i<trajectoryCount; i++) {
+			let current = cTree.children;
+			for (let j = 0; j<components[i].length; j++) {
+				let pix = components[i][j];
+				if (!current.has(pix)) {
+					let t = imageTimes[j];
+					current.set(pix, {
+						x:Math.floor(t*trajectories[i].xv),
+						y:Math.floor(t*trajectories[i].yv),
+						count: 1,
+						children:new Map()});
+				}
+				current = current.get(pix).children;
+				current.count++;
+			}
+
+		}
+
+		console.log(cTree);
+
+		// Draw all trajectories
+		/*
 		ctx.fillStyle="#FF0000";
 		for (t of trajectories) {
 			ctx.fillRect(400+t.xv,300-t.yv,1,1);
 		}
-		//*/
+		*/
 
+		// Draw tree
+		drawChildren(cTree, 0);
+
+
+		console.log("trajectories");
 		console.log(trajectories);
 
+		console.log("samplePoints");
 		console.log(samplePoints);
 
 	//	console.log(mapToSpiral(3000, 3000, 3));
+
+		function drawChildren(n, depth) {
+			ctx.fillStyle = ('rgb(' + (depth*15) + ', ' +
+			(255-depth*15) + ', 0)');
+			ctx.fillRect(20+n.x*7+(200*depth%800), 150-n.y*7+Math.floor(depth/4)*250, 5,5);
+			for (var b of n.children.values()) {
+				drawChildren(b, depth+1);
+			}
+		}
 
 		function mapToSpiral(x,y,z) {
 			let ax = Math.abs(x);
@@ -103,7 +142,7 @@
 		}
 
 		// Combine sets
-		function setUnion(a,b) {
+		function setIntersection(a,b) {
 			let intersection = new Set();
 			for (var elem of b) {
 				if (a.has(elem)) {
