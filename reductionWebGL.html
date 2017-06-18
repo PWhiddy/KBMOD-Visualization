@@ -181,6 +181,7 @@
 		var rawColors = [];
 		buildChildren(cTree, rawOffsets, rawColors, 0);
 		var cubeGeo = constructMeshes(rawOffsets, rawColors);
+		console.log(rawOffsets.length/3 + " Tiles");
 
 		var cubeMat = new THREE.RawShaderMaterial( {
 				uniforms: {},
@@ -195,8 +196,9 @@
 
 		rawVerts = [];
 		rawLineCols = [];
-		buildLines(cTree, rawVerts, rawColors, 0);
-		var linesGeo = constructLines(rawVerts, rawColors);
+		buildLines(cTree, rawVerts, rawLineCols, 0);
+		var linesGeo = constructLines(rawVerts, rawLineCols);
+		console.log(rawVerts.length/6 + " Line Segments");
 
 		var linesMat = new THREE.LineBasicMaterial({vertexColors:THREE.VertexColors});
 		var linesObj = new THREE.LineSegments(linesGeo, linesMat);
@@ -235,7 +237,7 @@
 		}
 
 		function buildLines(n, verts, cols, depth) {
-			if (depth<5) {
+			if (depth<7) {
 				for (var b of n.children.values()) {
 					verts.push(2*-n.x);
 					verts.push(2*n.y);
@@ -245,9 +247,9 @@
 					verts.push(imageTimes[depth+1]*150);
 					cols.push(0.8);
 					cols.push(0.4);
-					cols.push(0.0);
-					cols.push(0.8);
-					cols.push(0.4);
+					cols.push(0.7);
+					cols.push(1.0);
+					cols.push(0.85);
 					cols.push(0.0);
 					buildLines(b, verts, cols, depth+1);
 				}
@@ -256,7 +258,6 @@
 		
 		function constructMeshes(offsets, colors) {
 			// geometry
-			var instances = offsets.length/3;
 			offsets = new Float32Array(offsets);
 			colors = new Float32Array(colors);
 			var cubeGeo = new THREE.InstancedBufferGeometry();
