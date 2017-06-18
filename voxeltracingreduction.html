@@ -9,21 +9,23 @@
 	</head>
 	<body>
 
-	 <canvas id="myCanvas" width="800" height="800" style="border:1px solid #000000;">
-	</canvas> 
+
+
+		<script src="js/three.js"></script>
+		<script src="js/OrbitControls.js"></script>
 
 		<script>
 
-		var c = document.getElementById("myCanvas");
-		var ctx = c.getContext("2d");	
+	//	var c = document.getElementById("myCanvas");
+	//	var ctx = c.getContext("2d");	
 
-		const anglesCount = 20;
+		const anglesCount = 150;
 		const minAngle = 0.0;
 		const maxAngle = 1.0;
 		const angleStep = (maxAngle - minAngle)/anglesCount;
 
-		const velocitiesCount = 20;
-		const minVelocity = 30;
+		const velocitiesCount = 350;
+		const minVelocity = 100;
 		const maxVelocity = 350;
 		const velocityStep = 
 			(maxVelocity - minVelocity)/velocitiesCount;
@@ -32,6 +34,7 @@
 
 		const trajectoryCount = anglesCount*velocitiesCount;
 
+		// Generate trajectories
 		var trajectories = [trajectoryCount];
 		for (let a = 0; a<anglesCount; a++) {
 			let cAngle = minAngle+a*angleStep;
@@ -44,9 +47,10 @@
 			}
 		}
 
+		// Create list of pixels sampled by trajectories
 		var samplePoints = [trajectoryCount];
 		var masterList = new Map();
-		ctx.fillStyle="#00FF00";
+	//	ctx.fillStyle="#00FF00";
 		for (let t = 0; t<trajectoryCount; t++) {
 			let curTraj = trajectories[t];
 			let curSamples = [];
@@ -64,6 +68,8 @@
 			samplePoints[t] = curSamples;
 		}
 
+		// Build list of pixels used multiple times
+		/*
 		var dupList = new Set();
 		for (var [key, value] of masterList) {
 			if (value > 1) {
@@ -71,31 +77,37 @@
 				dupList.add(key);
 			}
 		}
+		*/
 
+		// Remove samples that only 
 		var components = [];
 		for (var tSet of samplePoints) {
-			components.push([...setIntersection(new Set(tSet), dupList)]); //sketchy
+		//	components.push([...setIntersection(new Set(tSet), dupList)]); //sketchy
+			components.push(tSet);
 		}
 		console.log("Components: ");
 		console.log(components);
 
+		// Construct tree of pixel samples
 		var cTree = {};
 		//cTree.pixel = 1;
 		cTree.children = new Map();
 		for (let i = 0; i<trajectoryCount; i++) {
-			let current = cTree.children;
+			let current = cTree;
 			for (let j = 0; j<components[i].length; j++) {
 				let pix = components[i][j];
-				if (!current.has(pix)) {
+				current.totalChildren++;
+				if (!current.children.has(pix)) {
 					let t = imageTimes[j];
-					current.set(pix, {
+					current.children.set(pix, {
 						x:Math.floor(t*trajectories[i].xv),
 						y:Math.floor(t*trajectories[i].yv),
-						count: 1,
+						depth: j,
+						time: t,
+						totalChildren: 0,
 						children:new Map()});
 				}
-				current = current.get(pix).children;
-				current.count++;
+				current = current.children.get(pix);		
 			}
 
 		}
@@ -111,7 +123,7 @@
 		*/
 
 		// Draw tree
-		drawChildren(cTree, 0);
+		//drawChildren(cTree, 0);
 
 
 		console.log("trajectories");
@@ -122,6 +134,77 @@
 
 	//	console.log(mapToSpiral(3000, 3000, 3));
 
+		// threejs setup 
+
+		// A container to place our objects into
+		var scene = new THREE.Scene();
+		/*
+		* PerspectiveCamera( fov, aspect, near, far )
+		* fov — Camera  vertical field of view.
+		* aspect — Camera  aspect ratio.
+		* near — Camera near plane. (Objects outside the near and far plane won't be rendered)
+		* far — Camera far plane.
+		*/
+		var width = window.innerWidth;
+		var height = window.innerHeight;
+		var camera = new THREE.PerspectiveCamera( 35, 
+			width/height, 2, 4800 );
+
+		// Move camera back so we are looking at the origin
+		camera.position.z = -100;
+		camera.lookAt(new THREE.Vector3());
+
+		// The threejs webgl renderer
+		var renderer = new THREE.WebGLRenderer({antialias: true});
+		// Tell renderer the dimensions of our screen
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		renderer.setPixelRatio( window.devicePixelRatio );
+		renderer.setClearColor(0xffffff, 1.0);
+		// Attach renderer to DOM element 
+		document.body.appendChild( renderer.domElement );
+
+		// adding orbit controls to allow camera movement
+		var controls = new THREE.OrbitControls( camera, renderer.domElement );
+		controls.enableDamping = true;
+		controls.dampingFactor = 0.25;	
+		controls.zoomSpeed = 0.5;
+		controls.rotateSpeed = 0.4;
+
+		buildChildren(cTree, scene, -1);
+
+
+		var render = function(){
+			requestAnimationFrame(render);
+			renderer.render(scene, camera);
+		}
+
+		render();
+
+		function buildChildren(n, scn, depth) {
+			if (n.x !== undefined && depth ==8) {
+				var col;
+				if (n.totalChildren<1) {
+					col = new THREE.Color(0,0,0);
+				} else {
+					col = new THREE.Color(depth/12,1-depth/12,n.totalChildren/4);
+				}
+				let geo = new THREE.BoxGeometry(0.8,0.8, 0.15);
+				let mat = new THREE.MeshBasicMaterial({
+					color:col, 
+					//side:THREE.DoubleSide
+				});
+				let tile = new THREE.Mesh(geo,mat);
+				tile.position.x = -n.x;
+				tile.position.y = n.y;
+				tile.position.z = imageTimes[depth]*70;
+				} 
+				scn.add(tile);
+			}
+			for (var b of n.children.values()) {
+				buildChildren(b, scn, depth+1);
+			}
+		}
+		/*
 		function drawChildren(n, depth) {
 			ctx.fillStyle = ('rgb(' + (depth*15) + ', ' +
 			(255-depth*15) + ', 0)');
@@ -130,7 +213,7 @@
 				drawChildren(b, depth+1);
 			}
 		}
-
+*/
 		function mapToSpiral(x,y,z) {
 			let ax = Math.abs(x);
 			let ay = Math.abs(y);
