@@ -47,13 +47,13 @@
 	//	var c = document.getElementById("myCanvas");
 	//	var ctx = c.getContext("2d");	
 
-		const anglesCount = 20;
+		const anglesCount = 10;
 		const minAngle = 0.0;
 		const maxAngle = 1.0;
 		const angleStep = (maxAngle - minAngle)/anglesCount;
 
-		const velocitiesCount = 50;
-		const minVelocity = 30;
+		const velocitiesCount = 15;
+		const minVelocity = 80;
 		const maxVelocity = 350;
 		const velocityStep = 
 			(maxVelocity - minVelocity)/velocitiesCount;
@@ -78,13 +78,11 @@
 		// Create list of pixels sampled by trajectories
 		var samplePoints = [trajectoryCount];
 		var masterList = new Map();
-	//	ctx.fillStyle="#00FF00";
 		for (let t = 0; t<trajectoryCount; t++) {
 			let curTraj = trajectories[t];
 			let curSamples = [];
 			for (var img = 0; img<imageTimes.length; img++) {
 				let time = imageTimes[img];
-			//	ctx.fillRect(400+time*curTraj.xv,300-time*curTraj.yv,1,1);
 				let val = mapToSpiral(Math.floor(time*curTraj.xv), Math.floor(time*curTraj.yv), img);
 				curSamples.push(val);
 				if (!masterList.has(val)) {
@@ -104,7 +102,7 @@
 				console.log(key + ", " + value + " Occurances");
 				dupList.add(key);
 			}
-		}
+		}S
 		*/
 
 		// Remove samples that only 
@@ -139,40 +137,21 @@
 			}
 
 		}
+		cTree = cTree.children.get(1);
 
 		console.log(cTree);
 
-		// Draw all trajectories
-		/*
-		ctx.fillStyle="#FF0000";
-		for (t of trajectories) {
-			ctx.fillRect(400+t.xv,300-t.yv,1,1);
-		}
-		*/
+	//	console.log("trajectories");
+	//	console.log(trajectories);
 
-		// Draw tree
-		//drawChildren(cTree, 0);
-
-
-		console.log("trajectories");
-		console.log(trajectories);
-
-		console.log("samplePoints");
-		console.log(samplePoints);
-
-	//	console.log(mapToSpiral(3000, 3000, 3));
+	//	console.log("samplePoints");
+	//	console.log(samplePoints);
 
 		// threejs setup 
 
 		// A container to place our objects into
 		var scene = new THREE.Scene();
-		/*
-		* PerspectiveCamera( fov, aspect, near, far )
-		* fov — Camera  vertical field of view.
-		* aspect — Camera  aspect ratio.
-		* near — Camera near plane. (Objects outside the near and far plane won't be rendered)
-		* far — Camera far plane.
-		*/
+
 		var width = window.innerWidth;
 		var height = window.innerHeight;
 		var camera = new THREE.PerspectiveCamera( 35, 
@@ -194,15 +173,14 @@
 		// adding orbit controls to allow camera movement
 		var controls = new THREE.OrbitControls( camera, renderer.domElement );
 		controls.enableDamping = true;
-		controls.dampingFactor = 0.25;	
+		controls.dampingFactor = 0.25;
 		controls.zoomSpeed = 0.5;
 		controls.rotateSpeed = 0.4;
 
 		var rawOffsets = [];
 		var rawColors = [];
-		buildChildren(cTree, rawOffsets, rawColors, -1);
+		buildChildren(cTree, rawOffsets, rawColors, 0);
 		var cubeGeo = constructMeshes(rawOffsets, rawColors);
-		//buildChildren(cTree, scene, -1);
 
 		var cubeMat = new THREE.RawShaderMaterial( {
 				uniforms: {},
@@ -211,15 +189,20 @@
 				side: THREE.DoubleSide,
 				transparent: false
 			} );
-		var mesh = new THREE.Mesh( cubeGeo, cubeMat );
-		mesh.frustumCulled = false;
-		scene.add( mesh );
+		var cubesMesh = new THREE.Mesh( cubeGeo, cubeMat );
+		cubesMesh.frustumCulled = false;
+		scene.add( cubesMesh );
+
+		rawVerts = [];
+		rawLineCols = [];
+		buildLines(cTree, rawVerts, rawColors, 0);
+		var linesGeo = constructLines(rawVerts, rawColors);
+
+		var linesMat = new THREE.LineBasicMaterial({vertexColors:THREE.VertexColors});
+		var linesObj = new THREE.LineSegments(linesGeo, linesMat);
+		scene.add(linesObj);
 
 		///////////////////////////
-
-
-		////////////////////////////
-
 
 		var render = function(){
 			requestAnimationFrame(render);
@@ -229,43 +212,50 @@
 		render();
 
 		function buildChildren(n, offs, cols, depth) {
-			if (depth < 10) {
+			if (depth < 100) {
 				var col;
 				if (n.totalChildren<1) {
-					//col = new THREE.Color(0,0,0);
 					cols.push(0);
 					cols.push(0);
 					cols.push(0);
 				} else {
-					//col = new THREE.Color(depth/12,1-depth/12,n.totalChildren/4);
 					cols.push(depth/12);
 					cols.push(1-depth/12);
 					cols.push(n.totalChildren/4);
 				}
-				/*
-				let geo = new THREE.BoxGeometry(0.8,0.8, 0.15);
-				let mat = new THREE.MeshBasicMaterial({
-					color:col, 
-					//side:THREE.DoubleSide
-				});
-				let tile = new THREE.Mesh(geo,mat);
-				*/
+
 				offs.push(2*-n.x);
 				offs.push(2*n.y);
 				offs.push(imageTimes[depth]*150);
-				//tile.position.x = -n.x;
-				//tile.position.y = n.y;
-				//tile.position.z = imageTimes[depth]*70;
-				 
-				//scn.add(tile);
+
+				for (var b of n.children.values()) {
+					buildChildren(b, offs, cols, depth+1);
+				}
 			}
-			for (var b of n.children.values()) {
-				buildChildren(b, offs, cols, depth+1);
+		}
+
+		function buildLines(n, verts, cols, depth) {
+			if (depth<5) {
+				for (var b of n.children.values()) {
+					verts.push(2*-n.x);
+					verts.push(2*n.y);
+					verts.push(imageTimes[depth]*150);
+					verts.push(2*-b.x);
+					verts.push(2*b.y);
+					verts.push(imageTimes[depth+1]*150);
+					cols.push(0.8);
+					cols.push(0.4);
+					cols.push(0.0);
+					cols.push(0.8);
+					cols.push(0.4);
+					cols.push(0.0);
+					buildLines(b, verts, cols, depth+1);
+				}
 			}
 		}
 		
 		function constructMeshes(offsets, colors) {
-				// geometry
+			// geometry
 			var instances = offsets.length/3;
 			offsets = new Float32Array(offsets);
 			colors = new Float32Array(colors);
@@ -324,42 +314,23 @@
 			cubeGeo.setIndex( new THREE.BufferAttribute( indices, 1 ) );
 			// per instance data
 			var offsets = new THREE.InstancedBufferAttribute( offsets, 3, 1 );
-			/*
-			var vector = new THREE.Vector4();
-			for ( var i = 0;  i < offsets.count; i++ ) {
-				var x = Math.random() * 100 - 50;
-				var y = Math.random() * 100 - 50;
-				var z = Math.random() * 100 - 50;
-				vector.set( x, y, z, 0 ).normalize();
-				// move out at least 5 units from center in current direction
-				offsets.setXYZ( i, x + vector.x * 5, y + vector.y * 5, z + vector.z * 5 );
-			}
-			*/
+
 			cubeGeo.addAttribute( 'offset', offsets ); // per mesh translation
 
 			var colors = new THREE.InstancedBufferAttribute( colors, 3, 1 );
-			/*
-			for ( var i = 0; i < colors.count; i++ ) {
-				var r = Math.random();
-				var g = Math.random();
-				var b = Math.random();
-				colors.setXYZ( i, r, g, b );
-			}
-			*/
+
 			cubeGeo.addAttribute( 'color', colors ); // per mesh translation
 			return cubeGeo;
-			/*
-			var cubeMat = new THREE.RawShaderMaterial( {
-				uniforms: {},
-				vertexShader: document.getElementById( 'vertexShader' ).textContent,
-				fragmentShader: document.getElementById( 'fragmentShader' ).textContent,
-				side: THREE.DoubleSide,
-				transparent: false
-			} );
-			var mesh = new THREE.Mesh( cubeGeo, cubeMat );
-			scene.add( mesh );
-			*/
+		}
 
+		function constructLines(verts, col) {
+	 		var linesGeo = new THREE.BufferGeometry();
+	 		var vertices = new THREE.BufferAttribute(new Float32Array(verts), 3);
+	 		linesGeo.addAttribute('position', vertices);
+	 		var colors = new THREE.BufferAttribute(new Float32Array(col), 3);
+	 		linesGeo.addAttribute('color', colors); 
+	 		linesGeo.computeBoundingSphere();
+	 		return linesGeo;
 		}
 
 		function mapToSpiral(x,y,z) {
