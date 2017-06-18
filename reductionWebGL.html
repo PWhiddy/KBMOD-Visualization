@@ -53,7 +53,7 @@
 		const angleStep = (maxAngle - minAngle)/anglesCount;
 
 		const velocitiesCount = 50;
-		const minVelocity = 100;
+		const minVelocity = 30;
 		const maxVelocity = 350;
 		const velocityStep = 
 			(maxVelocity - minVelocity)/velocitiesCount;
@@ -176,7 +176,7 @@
 		var width = window.innerWidth;
 		var height = window.innerHeight;
 		var camera = new THREE.PerspectiveCamera( 35, 
-			width/height, 2, 4800 );
+			width/height, 3, 14800 );
 
 		// Move camera back so we are looking at the origin
 		camera.position.z = -100;
@@ -212,6 +212,7 @@
 				transparent: false
 			} );
 		var mesh = new THREE.Mesh( cubeGeo, cubeMat );
+		mesh.frustumCulled = false;
 		scene.add( mesh );
 
 		///////////////////////////
@@ -228,7 +229,7 @@
 		render();
 
 		function buildChildren(n, offs, cols, depth) {
-			if (n.x !== undefined && depth < 8) {
+			if (depth < 10) {
 				var col;
 				if (n.totalChildren<1) {
 					//col = new THREE.Color(0,0,0);
