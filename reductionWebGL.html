@@ -13,7 +13,7 @@
 
 		<script src="js/three.js"></script>
 		<script src="js/OrbitControls.js"></script>
-
+		<script src="js/dat.gui.min.js"></script>
 
 		<script id="vertexShader" type="x-shader/x-vertex">
 			precision highp float;
@@ -21,12 +21,9 @@
 			uniform mat4 projectionMatrix;
 			attribute vec3 position;
 			attribute vec3 offset;
-			//attribute vec2 uv;
 			attribute vec3 color;
-			//varying vec2 vUv;
 			varying vec3 col;
 			void main() {
-				//vUv = uv;
 				col = color;
 				gl_Position = projectionMatrix * modelViewMatrix * vec4( offset + position, 1.0 );
 			}
@@ -34,25 +31,20 @@
 
 		<script id="fragmentShader" type="x-shader/x-fragment">
 			precision highp float;
-			//uniform sampler2D map;
-			//varying vec2 vUv;
 			varying vec3 col;
 			void main() {
-				gl_FragColor = vec4(col,1.0);//texture2D(map, vUv);
+				gl_FragColor = vec4(col,1.0);
 			}
 		</script>
 
 		<script>
 
-	//	var c = document.getElementById("myCanvas");
-	//	var ctx = c.getContext("2d");	
-
-		const anglesCount = 10;
-		const minAngle = 0.0;
-		const maxAngle = 1.0;
+		const anglesCount = 40;
+		const minAngle = 0.1;
+		const maxAngle = 1.2;//3.14159*2;
 		const angleStep = (maxAngle - minAngle)/anglesCount;
 
-		const velocitiesCount = 15;
+		const velocitiesCount = 100;
 		const minVelocity = 80;
 		const maxVelocity = 350;
 		const velocityStep = 
@@ -61,6 +53,8 @@
 		const imageTimes = [0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.1, 1.01, 1.03, 1.04, 1.1];
 
 		const trajectoryCount = anglesCount*velocitiesCount;
+
+		const depthSpacing = 250;
 
 		// Generate trajectories
 		var trajectories = [trajectoryCount];
@@ -177,22 +171,51 @@
 		controls.zoomSpeed = 0.5;
 		controls.rotateSpeed = 0.4;
 
+		/// Controls ///
+		var param = {
+			perspective:true,
+			tilesVisible:true,
+			linesVisible:false
+		};
+		var gui = new dat.GUI();
+		gui.add(param, "perspective").onChange( function() {
+			if (!param.perspective) {
+				controls.rotateSpeed = 0.04;
+				camera.fov = 0.1;
+				camera.position = camera.position.multiplyScalar(200);
+				camera.near = 2000;
+				camera.far = 1000000;
+				camera.updateProjectionMatrix();
+			} else {
+				controls.rotateSpeed = 0.4;
+				camera.fov = 35;
+				camera.position = camera.position.multiplyScalar(0.005);
+				camera.near = 2;
+				camera.far = 4800;
+				camera.updateProjectionMatrix();
+			}
+		});
+		gui.add(param, "tilesVisible");
+		gui.add(param, "linesVisible");
+
+		///////////// 
+
 		var rawOffsets = [];
 		var rawColors = [];
 		buildChildren(cTree, rawOffsets, rawColors, 0);
-		var cubeGeo = constructMeshes(rawOffsets, rawColors);
+		var tileGeo = constructMeshes(rawOffsets, rawColors);
 		console.log(rawOffsets.length/3 + " Tiles");
 
-		var cubeMat = new THREE.RawShaderMaterial( {
+		var tileMat = new THREE.RawShaderMaterial( {
 				uniforms: {},
 				vertexShader: document.getElementById( 'vertexShader' ).textContent,
 				fragmentShader: document.getElementById( 'fragmentShader' ).textContent,
 				side: THREE.DoubleSide,
 				transparent: false
 			} );
-		var cubesMesh = new THREE.Mesh( cubeGeo, cubeMat );
-		cubesMesh.frustumCulled = false;
-		scene.add( cubesMesh );
+		var tilesMesh = new THREE.Mesh( tileGeo, tileMat );
+		tilesMesh.frustumCulled = false;
+		scene.add( tilesMesh );
 
 		rawVerts = [];
 		rawLineCols = [];
@@ -208,6 +231,8 @@
 
 		var render = function(){
 			requestAnimationFrame(render);
+			linesObj.visible = param.linesVisible;
+			tilesMesh.visible = param.tilesVisible;
 			renderer.render(scene, camera);
 		}
 
@@ -228,7 +253,7 @@
 
 				offs.push(2*-n.x);
 				offs.push(2*n.y);
-				offs.push(imageTimes[depth]*150);
+				offs.push(imageTimes[depth]*depthSpacing);
 
 				for (var b of n.children.values()) {
 					buildChildren(b, offs, cols, depth+1);
@@ -241,16 +266,16 @@
 				for (var b of n.children.values()) {
 					verts.push(2*-n.x);
 					verts.push(2*n.y);
-					verts.push(imageTimes[depth]*150);
+					verts.push(imageTimes[depth]*depthSpacing);
 					verts.push(2*-b.x);
 					verts.push(2*b.y);
-					verts.push(imageTimes[depth+1]*150);
+					verts.push(imageTimes[depth+1]*depthSpacing);
 					cols.push(0.8);
-					cols.push(0.4);
-					cols.push(0.7);
+					cols.push(0.6);
+					cols.push(0.5);
 					cols.push(1.0);
-					cols.push(0.85);
-					cols.push(0.0);
+					cols.push(0.95);
+					cols.push(0.25);
 					buildLines(b, verts, cols, depth+1);
 				}
 			}
@@ -260,7 +285,7 @@
 			// geometry
 			offsets = new Float32Array(offsets);
 			colors = new Float32Array(colors);
-			var cubeGeo = new THREE.InstancedBufferGeometry();
+			var tileGeo = new THREE.InstancedBufferGeometry();
 			// per mesh data
 			var vertices = new THREE.BufferAttribute( new Float32Array( [
 				// Front
@@ -295,7 +320,7 @@
 				-0.8, -0.8, -0.15
 			] ), 3 );
 
-			cubeGeo.addAttribute( 'position', vertices );
+			tileGeo.addAttribute( 'position', vertices );
 
 			var indices = new Uint16Array( [
 				0, 1, 2,
@@ -312,16 +337,16 @@
 				22, 21, 23
 			] );
 
-			cubeGeo.setIndex( new THREE.BufferAttribute( indices, 1 ) );
+			tileGeo.setIndex( new THREE.BufferAttribute( indices, 1 ) );
 			// per instance data
 			var offsets = new THREE.InstancedBufferAttribute( offsets, 3, 1 );
 
-			cubeGeo.addAttribute( 'offset', offsets ); // per mesh translation
+			tileGeo.addAttribute( 'offset', offsets ); // per mesh translation
 
 			var colors = new THREE.InstancedBufferAttribute( colors, 3, 1 );
 
-			cubeGeo.addAttribute( 'color', colors ); // per mesh translation
-			return cubeGeo;
+			tileGeo.addAttribute( 'color', colors ); // per mesh translation
+			return tileGeo;
 		}
 
 		function constructLines(verts, col) {
