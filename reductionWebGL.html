@@ -39,112 +39,26 @@
 
 		<script>
 
-		const anglesCount = 40;
-		const minAngle = 0.1;
-		const maxAngle = 1.2;//3.14159*2;
-		const angleStep = (maxAngle - minAngle)/anglesCount;
-
-		const velocitiesCount = 100;
-		const minVelocity = 80;
-		const maxVelocity = 350;
-		const velocityStep = 
-			(maxVelocity - minVelocity)/velocitiesCount;
+		var param = {
+			perspective:true,
+			tilesVisible:true,
+			linesVisible:false,
+			anglesCount: 20,
+			minAngle: 0.1,
+			maxAngle: 1.2,//3.14159*2,
+			velocitiesCount: 200,
+			minVelocity: 80,
+			maxVelocity: 350,
+			depthSpacing: 250,
+			rebuild: null
+		};
 
 		const imageTimes = [0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.1, 1.01, 1.03, 1.04, 1.1];
-
-		const trajectoryCount = anglesCount*velocitiesCount;
-
-		const depthSpacing = 250;
-
-		// Generate trajectories
-		var trajectories = [trajectoryCount];
-		for (let a = 0; a<anglesCount; a++) {
-			let cAngle = minAngle+a*angleStep;
-			for (let v = 0; v<velocitiesCount; v++) {
-				let current = {};
-				let cVel = minVelocity+v*velocityStep;
-				current.xv = cVel*Math.cos(cAngle);
-				current.yv = cVel*Math.sin(cAngle);
-				trajectories[a*velocitiesCount+v] = current;
-			}
-		}
-
-		// Create list of pixels sampled by trajectories
-		var samplePoints = [trajectoryCount];
-		var masterList = new Map();
-		for (let t = 0; t<trajectoryCount; t++) {
-			let curTraj = trajectories[t];
-			let curSamples = [];
-			for (var img = 0; img<imageTimes.length; img++) {
-				let time = imageTimes[img];
-				let val = mapToSpiral(Math.floor(time*curTraj.xv), Math.floor(time*curTraj.yv), img);
-				curSamples.push(val);
-				if (!masterList.has(val)) {
-					masterList.set(val, 1);
-				} else {
-					masterList.set(val, masterList.get(val)+1);
-				}
-			}
-			samplePoints[t] = curSamples;
-		}
-
-		// Build list of pixels used multiple times
-		/*
-		var dupList = new Set();
-		for (var [key, value] of masterList) {
-			if (value > 1) {
-				console.log(key + ", " + value + " Occurances");
-				dupList.add(key);
-			}
-		}S
-		*/
-
-		// Remove samples that only 
-		var components = [];
-		for (var tSet of samplePoints) {
-		//	components.push([...setIntersection(new Set(tSet), dupList)]); //sketchy
-			components.push(tSet);
-		}
-		console.log("Components: ");
-		console.log(components);
-
-		// Construct tree of pixel samples
-		var cTree = {};
-		//cTree.pixel = 1;
-		cTree.children = new Map();
-		for (let i = 0; i<trajectoryCount; i++) {
-			let current = cTree;
-			for (let j = 0; j<components[i].length; j++) {
-				let pix = components[i][j];
-				current.totalChildren++;
-				if (!current.children.has(pix)) {
-					let t = imageTimes[j];
-					current.children.set(pix, {
-						x:Math.floor(t*trajectories[i].xv),
-						y:Math.floor(t*trajectories[i].yv),
-						depth: j,
-						time: t,
-						totalChildren: 0,
-						children:new Map()});
-				}
-				current = current.children.get(pix);		
-			}
-
-		}
-		cTree = cTree.children.get(1);
-
-		console.log(cTree);
-
-	//	console.log("trajectories");
-	//	console.log(trajectories);
-
-	//	console.log("samplePoints");
-	//	console.log(samplePoints);
 
 		// threejs setup 
 
 		// A container to place our objects into
-		var scene = new THREE.Scene();
+		var scene, linesObj, tilesMesh, trajectories, samplePoints,trajectoryCount;
 
 		var width = window.innerWidth;
 		var height = window.innerHeight;
@@ -172,11 +86,7 @@
 		controls.rotateSpeed = 0.4;
 
 		/// Controls ///
-		var param = {
-			perspective:true,
-			tilesVisible:true,
-			linesVisible:false
-		};
+
 		var gui = new dat.GUI();
 		gui.add(param, "perspective").onChange( function() {
 			if (!param.perspective) {
@@ -197,37 +107,14 @@
 		});
 		gui.add(param, "tilesVisible");
 		gui.add(param, "linesVisible");
-
-		///////////// 
-
-		var rawOffsets = [];
-		var rawColors = [];
-		buildChildren(cTree, rawOffsets, rawColors, 0);
-		var tileGeo = constructMeshes(rawOffsets, rawColors);
-		console.log(rawOffsets.length/3 + " Tiles");
-
-		var tileMat = new THREE.RawShaderMaterial( {
-				uniforms: {},
-				vertexShader: document.getElementById( 'vertexShader' ).textContent,
-				fragmentShader: document.getElementById( 'fragmentShader' ).textContent,
-				side: THREE.DoubleSide,
-				transparent: false
-			} );
-		var tilesMesh = new THREE.Mesh( tileGeo, tileMat );
-		tilesMesh.frustumCulled = false;
-		scene.add( tilesMesh );
-
-		rawVerts = [];
-		rawLineCols = [];
-		buildLines(cTree, rawVerts, rawLineCols, 0);
-		var linesGeo = constructLines(rawVerts, rawLineCols);
-		console.log(rawVerts.length/6 + " Line Segments");
-
-		var linesMat = new THREE.LineBasicMaterial({vertexColors:THREE.VertexColors});
-		var linesObj = new THREE.LineSegments(linesGeo, linesMat);
-		scene.add(linesObj);
-
-		///////////////////////////
+		gui.add(param, "anglesCount", 1, 400).step(1);
+		gui.add(param, "minAngle", 0.0, 6.2831863);
+		gui.add(param, "maxAngle", 0.0, 6.2831863);
+		gui.add(param, "velocitiesCount", 1, 400).step(1);
+		gui.add(param, "minVelocity", 5, 300);
+		gui.add(param, "maxVelocity", 30, 1200);
+		gui.add(param, "depthSpacing", 50, 600);
+		gui.close();
 
 		var render = function(){
 			requestAnimationFrame(render);
@@ -236,6 +123,103 @@
 			renderer.render(scene, camera);
 		}
 
+		///////////// 
+
+		param.rebuild = function () {
+
+			scene = new THREE.Scene();
+
+			let angleStep = (param.maxAngle - param.minAngle)/param.anglesCount;
+
+			let velocityStep = 
+				(param.maxVelocity - param.minVelocity)/param.velocitiesCount;
+
+			trajectoryCount = param.anglesCount*param.velocitiesCount;
+
+			// Generate trajectories
+			trajectories = [trajectoryCount];
+			for (let a = 0; a<param.anglesCount; a++) {
+				let cAngle = param.minAngle+a*angleStep;
+				for (let v = 0; v<param.velocitiesCount; v++) {
+					let current = {};
+					let cVel = param.minVelocity+v*velocityStep;
+					current.xv = cVel*Math.cos(cAngle);
+					current.yv = cVel*Math.sin(cAngle);
+					trajectories[a*param.velocitiesCount+v] = current;
+				}
+			}
+
+			console.log("trajectory Count: " +trajectoryCount);
+			// Create list of pixels sampled by trajectories
+			samplePoints = [trajectoryCount];
+			for (let t = 0; t<trajectoryCount; t++) {
+				let curTraj = trajectories[t];
+				let curSamples = [];
+				for (var img = 0; img<imageTimes.length; img++) {
+					let time = imageTimes[img];
+					let val = mapToSpiral(Math.round(time*curTraj.xv), Math.round(time*curTraj.yv), img);
+					curSamples.push(val);
+				}
+				samplePoints[t] = curSamples;
+			}
+
+			// Construct tree of pixel samples
+			var cTree = {};
+			//cTree.pixel = 1;
+			cTree.children = new Map();
+			for (let i = 0; i<trajectoryCount; i++) {
+				let current = cTree;
+				for (let j = 0; j<samplePoints[i].length; j++) {
+					let pix = samplePoints[i][j];
+					current.totalChildren++;
+					if (!current.children.has(pix)) {
+						let t = imageTimes[j];
+						current.children.set(pix, {
+							x:Math.round(t*trajectories[i].xv),
+							y:Math.round(t*trajectories[i].yv),
+							depth: j,
+							time: t,
+							totalChildren: 0,
+							children:new Map()});
+					}
+					current = current.children.get(pix);		
+				}
+
+			}
+			cTree = cTree.children.get(1);
+
+			console.log(cTree);
+
+			var rawOffsets = [];
+			var rawColors = [];
+			buildChildren(cTree, rawOffsets, rawColors, 0);
+			var tileGeo = constructMeshes(rawOffsets, rawColors);
+			console.log(rawOffsets.length/3 + " Tiles");
+
+			var tileMat = new THREE.RawShaderMaterial( {
+					uniforms: {},
+					vertexShader: document.getElementById( 'vertexShader' ).textContent,
+					fragmentShader: document.getElementById( 'fragmentShader' ).textContent,
+					side: THREE.DoubleSide,
+					transparent: false
+				} );
+			tilesMesh = new THREE.Mesh( tileGeo, tileMat );
+			tilesMesh.frustumCulled = false;
+			scene.add( tilesMesh );
+
+			rawVerts = [];
+			rawLineCols = [];
+			buildLines(cTree, rawVerts, rawLineCols, 0);
+			var linesGeo = constructLines(rawVerts, rawLineCols);
+			console.log(rawVerts.length/6 + " Line Segments");
+
+			var linesMat = new THREE.LineBasicMaterial({vertexColors:THREE.VertexColors});
+			linesObj = new THREE.LineSegments(linesGeo, linesMat);
+			scene.add(linesObj);
+		}
+
+		gui.add(param, "rebuild");
+		param.rebuild();
 		render();
 
 		function buildChildren(n, offs, cols, depth) {
@@ -253,7 +237,7 @@
 
 				offs.push(2*-n.x);
 				offs.push(2*n.y);
-				offs.push(imageTimes[depth]*depthSpacing);
+				offs.push(imageTimes[depth]*param.depthSpacing);
 
 				for (var b of n.children.values()) {
 					buildChildren(b, offs, cols, depth+1);
@@ -266,10 +250,10 @@
 				for (var b of n.children.values()) {
 					verts.push(2*-n.x);
 					verts.push(2*n.y);
-					verts.push(imageTimes[depth]*depthSpacing);
+					verts.push(imageTimes[depth]*param.depthSpacing);
 					verts.push(2*-b.x);
 					verts.push(2*b.y);
-					verts.push(imageTimes[depth+1]*depthSpacing);
+					verts.push(imageTimes[depth+1]*param.depthSpacing);
 					cols.push(0.8);
 					cols.push(0.6);
 					cols.push(0.5);
